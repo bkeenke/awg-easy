@@ -179,7 +179,7 @@ AllowedIPs = ${client.address}/32`;
       createdAt: new Date(client.createdAt),
       updatedAt: new Date(client.updatedAt),
       allowedIPs: client.allowedIPs,
-
+      downloadableConfig: 'privateKey' in client,
       persistentKeepalive: null,
       latestHandshakeAt: null,
       transferRx: null,
