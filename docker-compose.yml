@@ -5,7 +5,7 @@ services:
   awg-easy:
     env_file:
       - .env
-    image: ghcr.io/bkeenke/awg-easy
+    image: bksvt/awg-easy
     container_name: awg-easy
     volumes:
       - ~/.awg-easy:/etc/wireguard
