@@ -27,7 +27,6 @@ module.exports = class Server {
     // Express
     this.app = express()
       .disable('etag')
-      .use('/', express.static(path.join(__dirname, '..', 'www')))
       .use(express.json())
       .use(expressSession({
         secret: crypto.randomBytes(256).toString('hex'),
@@ -392,6 +391,9 @@ module.exports = class Server {
         const { address } = req.body;
         return WireGuard.updateClientAddress({ clientId: actualClientId, address });
       }))
+
+      // Serve static files (must be AFTER all API routes)
+      .use('/', express.static(path.join(__dirname, '..', 'www')))
 
       .listen(PORT, WEBUI_HOST, () => {
         debug(`Listening on http://${WEBUI_HOST}:${PORT}`);
