@@ -117,22 +117,31 @@ AmneziaWG Easy provides a REST API for programmatic access. Here are the availab
 ### Client Management
 - `GET /api/wireguard/client` - List all clients
 - `GET /api/wireguard/client?filter=<query>` - Search clients
-- `GET /api/wireguard/client/:clientId` - Get specific client
+- `GET /api/wireguard/client/:clientId` - Get specific client by ID
+- `GET /api/wireguard/client/:clientName?byName=true` - Get specific client by name
 - `POST /api/wireguard/client` - Create new client
-- `DELETE /api/wireguard/client/:clientId` - Delete client
-- `POST /api/wireguard/client/:clientId/enable` - Enable client
-- `POST /api/wireguard/client/:clientId/disable` - Disable client
-- `PUT /api/wireguard/client/:clientId/name` - Update client name
-- `PUT /api/wireguard/client/:clientId/address` - Update client address
+- `DELETE /api/wireguard/client/:clientId` - Delete client by ID
+- `DELETE /api/wireguard/client/:clientName?byName=true` - Delete client by name
+- `POST /api/wireguard/client/:clientId/enable` - Enable client by ID
+- `POST /api/wireguard/client/:clientName/enable?byName=true` - Enable client by name
+- `POST /api/wireguard/client/:clientId/disable` - Disable client by ID
+- `POST /api/wireguard/client/:clientName/disable?byName=true` - Disable client by name
+- `PUT /api/wireguard/client/:clientId/name` - Update client name by ID
+- `PUT /api/wireguard/client/:clientName/name?byName=true` - Update client name by current name
+- `PUT /api/wireguard/client/:clientId/address` - Update client address by ID
+- `PUT /api/wireguard/client/:clientName/address?byName=true` - Update client address by name
 
 ### Bulk Operations
 - `POST /api/wireguard/client/enable-all` - Enable all clients
 - `POST /api/wireguard/client/disable-all` - Disable all clients
 
 ### Configuration & QR Codes
-- `GET /api/wireguard/client/:clientId/configuration` - Download config file
-- `GET /api/wireguard/client/:clientId/qrcode.svg` - Get QR code as SVG
-- `GET /api/wireguard/client/:clientId/qrcode.png` - Get QR code as PNG
+- `GET /api/wireguard/client/:clientId/configuration` - Download config file by ID
+- `GET /api/wireguard/client/:clientName/configuration?byName=true` - Download config file by name
+- `GET /api/wireguard/client/:clientId/qrcode.svg` - Get QR code as SVG by ID
+- `GET /api/wireguard/client/:clientName/qrcode.svg?byName=true` - Get QR code as SVG by name
+- `GET /api/wireguard/client/:clientId/qrcode.png` - Get QR code as PNG by ID
+- `GET /api/wireguard/client/:clientName/qrcode.png?byName=true` - Get QR code as PNG by name
 
 ### Statistics & Information
 - `GET /api/wireguard/statistics` - Get server statistics

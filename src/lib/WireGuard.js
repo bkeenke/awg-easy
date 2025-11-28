@@ -237,14 +237,29 @@ AllowedIPs = ${client.address}/32`;
     });
   }
 
-  async getClient({ clientId }) {
+  async getClient({ clientId, name }) {
     const config = await this.getConfig();
-    const client = config.clients[clientId];
-    if (!client) {
-      throw new ServerError(`Client Not Found: ${clientId}`, 404);
+    
+    // Try to find by clientId first
+    if (clientId) {
+      const client = config.clients[clientId];
+      if (!client) {
+        throw new ServerError(`Client Not Found: ${clientId}`, 404);
+      }
+      return client;
     }
-
-    return client;
+    
+    // Try to find by name
+    if (name) {
+      for (const [id, client] of Object.entries(config.clients)) {
+        if (client.name === name) {
+          return { ...client, id };
+        }
+      }
+      throw new ServerError(`Client Not Found with name: ${name}`, 404);
+    }
+    
+    throw new ServerError('Either clientId or name must be provided', 400);
   }
 
   async getClientConfiguration({ clientId }) {

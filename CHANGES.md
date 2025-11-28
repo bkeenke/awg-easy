@@ -9,10 +9,21 @@
 1. **Получение информации о релизе**
    - `GET /api/information` - возвращает текущую версию, последнюю версию и наличие обновлений
    - `GET /api/wireguard/client/:clientId` - получение информации о конкретном клиенте
+   - `GET /api/wireguard/client/:clientName?byName=true` - получение информации по имени клиента
 
 2. **QR-коды**
-   - `GET /api/wireguard/client/:clientId/qrcode.svg` - QR-код в формате SVG (уже был)
+   - `GET /api/wireguard/client/:clientId/qrcode.svg` - QR-код в формате SVG
+   - `GET /api/wireguard/client/:clientName/qrcode.svg?byName=true` - QR-код SVG по имени
    - `GET /api/wireguard/client/:clientId/qrcode.png` - QR-код в формате PNG (новый)
+   - `GET /api/wireguard/client/:clientName/qrcode.png?byName=true` - QR-код PNG по имени
+
+3. **Работа с клиентами по имени (НОВОЕ)**
+   - Все операции с клиентами теперь поддерживают работу по имени через параметр `?byName=true`
+   - Включить/выключить клиента по имени
+   - Обновить параметры клиента по имени
+   - Скачать конфигурацию по имени
+   - Удалить клиента по имени
+   - Получить QR-код по имени
 
 3. **Статистика**
    - `GET /api/wireguard/statistics` - общая статистика по всем клиентам:

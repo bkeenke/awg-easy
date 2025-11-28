@@ -31,10 +31,13 @@ module.exports = class Server {
       .use(express.json())
       .use(expressSession({
         secret: crypto.randomBytes(256).toString('hex'),
-        resave: true,
-        saveUninitialized: true,
+        resave: false,
+        saveUninitialized: false,
         cookie: {
           httpOnly: true,
+          secure: false, // set to true if using HTTPS
+          maxAge: 24 * 60 * 60 * 1000, // 24 hours
+          sameSite: 'lax',
         },
       }))
 
@@ -108,30 +111,52 @@ module.exports = class Server {
         }
 
         req.session.authenticated = true;
-        req.session.save();
+        
+        // Save session and wait for it
+        await new Promise((resolve, reject) => {
+          req.session.save((err) => {
+            if (err) reject(err);
+            else resolve();
+          });
+        });
 
         debug(`New Session: ${req.session.id}`);
+        
+        return { success: true };
       }))
 
     // WireGuard
       .use((req, res, next) => {
+        // Skip authentication if no password is set
         if (!PASSWORD) {
           return next();
         }
 
+        // Debug logging
+        debug(`Auth check: ${req.method} ${req.path}`);
+        debug(`Session ID: ${req.session?.id}`);
+        debug(`Session authenticated: ${req.session?.authenticated}`);
+
+        // Check if session is authenticated
         if (req.session && req.session.authenticated) {
+          debug('Access granted via session');
           return next();
         }
 
+        // Check Authorization header as fallback
         if (req.path.startsWith('/api/') && req.headers['authorization']) {
-          if (bcrypt.compareSync(req.headers['authorization'], bcrypt.hashSync(PASSWORD, 10))) {
+          // Check if password matches
+          if (req.headers['authorization'] === PASSWORD) {
+            debug('Access granted via Authorization header');
             return next();
           }
+          debug('Authorization header invalid');
           return res.status(401).json({
             error: 'Incorrect Password',
           });
         }
 
+        debug('Access denied - not logged in');
         return res.status(401).json({
           error: 'Not Logged In',
         });
@@ -152,6 +177,19 @@ module.exports = class Server {
       }))
       .get('/api/wireguard/client/:clientId', Util.promisify(async (req) => {
         const { clientId } = req.params;
+        const { byName } = req.query;
+        
+        // If byName parameter is set, treat clientId as name
+        if (byName === 'true') {
+          const clients = await WireGuard.getClients();
+          const client = clients.find((c) => c.name === clientId);
+          if (!client) {
+            throw new ServerError(`Client Not Found with name: ${clientId}`, 404);
+          }
+          return client;
+        }
+        
+        // Otherwise treat as clientId
         const clients = await WireGuard.getClients();
         const client = clients.find((c) => c.id === clientId);
         if (!client) {
@@ -188,13 +226,37 @@ module.exports = class Server {
       }))
       .get('/api/wireguard/client/:clientId/qrcode.svg', Util.promisify(async (req, res) => {
         const { clientId } = req.params;
-        const svg = await WireGuard.getClientQRCodeSVG({ clientId });
+        const { byName } = req.query;
+        
+        let actualClientId = clientId;
+        if (byName === 'true') {
+          const clients = await WireGuard.getClients();
+          const client = clients.find((c) => c.name === clientId);
+          if (!client) {
+            throw new ServerError(`Client Not Found with name: ${clientId}`, 404);
+          }
+          actualClientId = client.id;
+        }
+        
+        const svg = await WireGuard.getClientQRCodeSVG({ clientId: actualClientId });
         res.header('Content-Type', 'image/svg+xml');
         res.send(svg);
       }))
       .get('/api/wireguard/client/:clientId/qrcode.png', Util.promisify(async (req, res) => {
         const { clientId } = req.params;
-        const dataUrl = await WireGuard.getClientQRCodeDataURL({ clientId });
+        const { byName } = req.query;
+        
+        let actualClientId = clientId;
+        if (byName === 'true') {
+          const clients = await WireGuard.getClients();
+          const client = clients.find((c) => c.name === clientId);
+          if (!client) {
+            throw new ServerError(`Client Not Found with name: ${clientId}`, 404);
+          }
+          actualClientId = client.id;
+        }
+        
+        const dataUrl = await WireGuard.getClientQRCodeDataURL({ clientId: actualClientId });
         // Convert data URL to buffer
         const base64Data = dataUrl.replace(/^data:image\/png;base64,/, '');
         const buffer = Buffer.from(base64Data, 'base64');
@@ -203,9 +265,21 @@ module.exports = class Server {
       }))
       .get('/api/wireguard/client/:clientId/configuration', Util.promisify(async (req, res) => {
         const { clientId } = req.params;
-        const client = await WireGuard.getClient({ clientId });
-        const config = await WireGuard.getClientConfiguration({ clientId });
-        const configName = Util.cleanFilename(client.name) || clientId;
+        const { byName } = req.query;
+        
+        let actualClientId = clientId;
+        if (byName === 'true') {
+          const clients = await WireGuard.getClients();
+          const client = clients.find((c) => c.name === clientId);
+          if (!client) {
+            throw new ServerError(`Client Not Found with name: ${clientId}`, 404);
+          }
+          actualClientId = client.id;
+        }
+        
+        const client = await WireGuard.getClient({ clientId: actualClientId });
+        const config = await WireGuard.getClientConfiguration({ clientId: actualClientId });
+        const configName = Util.cleanFilename(client.name) || actualClientId;
         res.header('Content-Disposition', `attachment; filename="${configName}.conf"`);
         res.header('Content-Type', 'text/plain');
         res.send(config);
@@ -216,21 +290,59 @@ module.exports = class Server {
       }))
       .delete('/api/wireguard/client/:clientId', Util.promisify(async (req) => {
         const { clientId } = req.params;
-        return WireGuard.deleteClient({ clientId });
+        const { byName } = req.query;
+        
+        let actualClientId = clientId;
+        if (byName === 'true') {
+          const clients = await WireGuard.getClients();
+          const client = clients.find((c) => c.name === clientId);
+          if (!client) {
+            throw new ServerError(`Client Not Found with name: ${clientId}`, 404);
+          }
+          actualClientId = client.id;
+        }
+        
+        return WireGuard.deleteClient({ clientId: actualClientId });
       }))
       .post('/api/wireguard/client/:clientId/enable', Util.promisify(async (req, res) => {
         const { clientId } = req.params;
+        const { byName } = req.query;
+        
         if (clientId === '__proto__' || clientId === 'constructor' || clientId === 'prototype') {
           res.end(403);
         }
-        return WireGuard.enableClient({ clientId });
+        
+        let actualClientId = clientId;
+        if (byName === 'true') {
+          const clients = await WireGuard.getClients();
+          const client = clients.find((c) => c.name === clientId);
+          if (!client) {
+            throw new ServerError(`Client Not Found with name: ${clientId}`, 404);
+          }
+          actualClientId = client.id;
+        }
+        
+        return WireGuard.enableClient({ clientId: actualClientId });
       }))
       .post('/api/wireguard/client/:clientId/disable', Util.promisify(async (req, res) => {
         const { clientId } = req.params;
+        const { byName } = req.query;
+        
         if (clientId === '__proto__' || clientId === 'constructor' || clientId === 'prototype') {
           res.end(403);
         }
-        return WireGuard.disableClient({ clientId });
+        
+        let actualClientId = clientId;
+        if (byName === 'true') {
+          const clients = await WireGuard.getClients();
+          const client = clients.find((c) => c.name === clientId);
+          if (!client) {
+            throw new ServerError(`Client Not Found with name: ${clientId}`, 404);
+          }
+          actualClientId = client.id;
+        }
+        
+        return WireGuard.disableClient({ clientId: actualClientId });
       }))
       .post('/api/wireguard/client/enable-all', Util.promisify(async (req) => {
         return WireGuard.enableAllClients();
@@ -240,19 +352,45 @@ module.exports = class Server {
       }))
       .put('/api/wireguard/client/:clientId/name', Util.promisify(async (req, res) => {
         const { clientId } = req.params;
+        const { byName } = req.query;
+        
         if (clientId === '__proto__' || clientId === 'constructor' || clientId === 'prototype') {
           res.end(403);
         }
+        
+        let actualClientId = clientId;
+        if (byName === 'true') {
+          const clients = await WireGuard.getClients();
+          const client = clients.find((c) => c.name === clientId);
+          if (!client) {
+            throw new ServerError(`Client Not Found with name: ${clientId}`, 404);
+          }
+          actualClientId = client.id;
+        }
+        
         const { name } = req.body;
-        return WireGuard.updateClientName({ clientId, name });
+        return WireGuard.updateClientName({ clientId: actualClientId, name });
       }))
       .put('/api/wireguard/client/:clientId/address', Util.promisify(async (req, res) => {
         const { clientId } = req.params;
+        const { byName } = req.query;
+        
         if (clientId === '__proto__' || clientId === 'constructor' || clientId === 'prototype') {
           res.end(403);
         }
+        
+        let actualClientId = clientId;
+        if (byName === 'true') {
+          const clients = await WireGuard.getClients();
+          const client = clients.find((c) => c.name === clientId);
+          if (!client) {
+            throw new ServerError(`Client Not Found with name: ${clientId}`, 404);
+          }
+          actualClientId = client.id;
+        }
+        
         const { address } = req.body;
-        return WireGuard.updateClientAddress({ clientId, address });
+        return WireGuard.updateClientAddress({ clientId: actualClientId, address });
       }))
 
       .listen(PORT, WEBUI_HOST, () => {
