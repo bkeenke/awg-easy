@@ -17,6 +17,27 @@ module.exports = class Util {
     return true;
   }
 
+  static isValidIPv6(str) {
+    // Simple IPv6 validation
+    const blocks = str.split(':');
+    if (blocks.length < 3 || blocks.length > 8) return false;
+    
+    for (const block of blocks) {
+      if (block === '') continue; // Allow :: notation
+      if (!/^[0-9a-fA-F]{0,4}$/.test(block)) return false;
+    }
+    
+    return true;
+  }
+
+  static cleanFilename(filename) {
+    return filename
+      .replace(/[^a-zA-Z0-9_=+.-]/g, '-')
+      .replace(/(-{2,}|-$)/g, '-')
+      .replace(/-$/, '')
+      .substring(0, 32);
+  }
+
   static promisify(fn) {
     // eslint-disable-next-line func-names
     return function(req, res) {

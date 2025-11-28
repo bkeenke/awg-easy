@@ -50,6 +50,9 @@ new Vue({
     clientEditAddress: null,
     clientEditAddressId: null,
     qrcode: null,
+    
+    searchFilter: '',
+    statistics: null,
 
     currentRelease: null,
     latestRelease: null,
@@ -120,6 +123,24 @@ new Vue({
           },
         },
       },
+    },
+  },
+  computed: {
+    filteredClients() {
+      if (!this.clients) return null;
+      
+      if (!this.searchFilter || !this.searchFilter.trim()) {
+        return this.clients;
+      }
+
+      const searchTerm = this.searchFilter.toLowerCase().trim();
+      return this.clients.filter((client) => {
+        return (
+          client.name.toLowerCase().includes(searchTerm) ||
+          client.address.includes(searchTerm) ||
+          client.id.toLowerCase().includes(searchTerm)
+        );
+      });
     },
   },
   methods: {
@@ -250,6 +271,42 @@ new Vue({
         .catch((err) => alert(err.message || err.toString()))
         .finally(() => this.refresh().catch(console.error));
     },
+    async enableAllClients() {
+      if (!confirm(this.$t('confirmEnableAll') || 'Enable all clients?')) return;
+      
+      try {
+        await this.api.call({
+          method: 'post',
+          path: '/wireguard/client/enable-all',
+        });
+        await this.refresh();
+      } catch (err) {
+        alert(err.message || err.toString());
+      }
+    },
+    async disableAllClients() {
+      if (!confirm(this.$t('confirmDisableAll') || 'Disable all clients?')) return;
+      
+      try {
+        await this.api.call({
+          method: 'post',
+          path: '/wireguard/client/disable-all',
+        });
+        await this.refresh();
+      } catch (err) {
+        alert(err.message || err.toString());
+      }
+    },
+    async loadStatistics() {
+      try {
+        this.statistics = await this.api.call({
+          method: 'get',
+          path: '/wireguard/statistics',
+        });
+      } catch (err) {
+        console.error('Failed to load statistics:', err);
+      }
+    },
     toggleTheme() {
       if (this.isDark) {
         localStorage.theme = 'light';
@@ -283,6 +340,7 @@ new Vue({
         }).catch((err) => {
           alert(err.message || err.toString());
         });
+        this.loadStatistics();
       })
       .catch((err) => {
         alert(err.message || err.toString());
@@ -292,6 +350,7 @@ new Vue({
       this.refresh({
         updateCharts: true,
       }).catch(console.error);
+      this.loadStatistics();
     }, 1000);
 
     Promise.resolve().then(async () => {
@@ -301,31 +360,44 @@ new Vue({
         i18n.locale = lang;
       }
 
-      const checkUpdate = await this.api.getCheckUpdate();
-      if (!checkUpdate) return;
-
-      const currentRelease = await this.api.getRelease();
-      const latestRelease = await fetch(CHANGELOG_URL)
-        .then((res) => res.json())
-        .then((releases) => {
-          const releasesArray = Object.entries(releases).map(([version, changelog]) => ({
-            version: parseInt(version, 10),
-            changelog,
-          }));
-          releasesArray.sort((a, b) => {
-            return b.version - a.version;
-          });
-
-          return releasesArray[0];
+      try {
+        const information = await this.api.call({
+          method: 'get',
+          path: '/information',
         });
 
-      console.log(`Current Release: ${currentRelease}`);
-      console.log(`Latest Release: ${latestRelease.version}`);
+        if (information.updateAvailable) {
+          this.currentRelease = information.currentRelease;
+          this.latestRelease = information.latestRelease;
+        }
+      } catch (err) {
+        // Fallback to old method
+        const checkUpdate = await this.api.getCheckUpdate();
+        if (!checkUpdate) return;
 
-      if (currentRelease >= latestRelease.version) return;
+        const currentRelease = await this.api.getRelease();
+        const latestRelease = await fetch(CHANGELOG_URL)
+          .then((res) => res.json())
+          .then((releases) => {
+            const releasesArray = Object.entries(releases).map(([version, changelog]) => ({
+              version: parseInt(version, 10),
+              changelog,
+            }));
+            releasesArray.sort((a, b) => {
+              return b.version - a.version;
+            });
 
-      this.currentRelease = currentRelease;
-      this.latestRelease = latestRelease;
+            return releasesArray[0];
+          });
+
+        console.log(`Current Release: ${currentRelease}`);
+        console.log(`Latest Release: ${latestRelease.version}`);
+
+        if (currentRelease >= latestRelease.version) return;
+
+        this.currentRelease = currentRelease;
+        this.latestRelease = latestRelease;
+      }
     }).catch(console.error);
   },
 });

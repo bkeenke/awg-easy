@@ -16,6 +16,13 @@ You have found the easiest way to install & manage AmneziaWG on any Linux host!
 * Tx/Rx charts for each connected client.
 * Gravatar support.
 * Automatic Light / Dark Mode
+* **NEW:** Search and filter clients by name, IP, or ID
+* **NEW:** Real-time server statistics (total, enabled, active clients)
+* **NEW:** Export all configurations at once
+* **NEW:** Mass enable/disable all clients
+* **NEW:** Enhanced QR code generation (SVG and PNG formats)
+* **NEW:** Improved API with more endpoints
+* **NEW:** Better mobile responsiveness
 
 ## Requirements
 
@@ -97,6 +104,46 @@ These options can be configured by setting environment variables using `-e KEY="
 | `H4` | `random` | `1234567894` | Transport packet magic header — header of the packet of the data packet. Must be < uint_max. |
 
 > If you change `WG_PORT`, make sure to also change the exposed port.
+
+## API Documentation
+
+AmneziaWG Easy provides a REST API for programmatic access. Here are the available endpoints:
+
+### Session Management
+- `GET /api/session` - Check session status
+- `POST /api/session` - Create session (login)
+- `DELETE /api/session` - Delete session (logout)
+
+### Client Management
+- `GET /api/wireguard/client` - List all clients
+- `GET /api/wireguard/client?filter=<query>` - Search clients
+- `GET /api/wireguard/client/:clientId` - Get specific client
+- `POST /api/wireguard/client` - Create new client
+- `DELETE /api/wireguard/client/:clientId` - Delete client
+- `POST /api/wireguard/client/:clientId/enable` - Enable client
+- `POST /api/wireguard/client/:clientId/disable` - Disable client
+- `PUT /api/wireguard/client/:clientId/name` - Update client name
+- `PUT /api/wireguard/client/:clientId/address` - Update client address
+
+### Bulk Operations
+- `POST /api/wireguard/client/enable-all` - Enable all clients
+- `POST /api/wireguard/client/disable-all` - Disable all clients
+
+### Configuration & QR Codes
+- `GET /api/wireguard/client/:clientId/configuration` - Download config file
+- `GET /api/wireguard/client/:clientId/qrcode.svg` - Get QR code as SVG
+- `GET /api/wireguard/client/:clientId/qrcode.png` - Get QR code as PNG
+
+### Statistics & Information
+- `GET /api/wireguard/statistics` - Get server statistics
+- `GET /api/wireguard/server-info` - Get server information
+- `GET /api/wireguard/export` - Export all configurations
+- `GET /api/information` - Get version and update information
+
+### Legacy Endpoints
+- `GET /api/release` - Get current release version
+- `GET /api/check-update` - Check if update is available
+- `GET /api/lang` - Get current language
 
 ## Updating
 

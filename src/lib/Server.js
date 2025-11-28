@@ -46,6 +46,38 @@ module.exports = class Server {
         return RELEASE;
       })))
 
+      .get('/api/information', (Util.promisify(async () => {
+        const semver = require('semver');
+        
+        // Fetch latest release info
+        let latestRelease = { version: RELEASE, changelog: '' };
+        let updateAvailable = false;
+        
+        if (CHECK_UPDATE) {
+          try {
+            const response = await fetch('https://raw.githubusercontent.com/spcfox/amnezia-wg-easy/production/docs/changelog.json');
+            const changelog = await response.json();
+            const versions = Object.keys(changelog).map((v) => parseInt(v, 10)).sort((a, b) => b - a);
+            if (versions.length > 0) {
+              latestRelease = {
+                version: versions[0],
+                changelog: changelog[versions[0]],
+              };
+              updateAvailable = parseInt(RELEASE, 10) < versions[0];
+            }
+          } catch (err) {
+            // Ignore errors
+          }
+        }
+
+        return {
+          currentRelease: RELEASE,
+          latestRelease,
+          updateAvailable,
+          isAwg: true,
+        };
+      })))
+
       .get('/api/lang', (Util.promisify(async () => {
         return LANG;
       })))
@@ -112,7 +144,47 @@ module.exports = class Server {
         debug(`Deleted Session: ${sessionId}`);
       }))
       .get('/api/wireguard/client', Util.promisify(async (req) => {
+        const { filter } = req.query;
+        if (filter) {
+          return WireGuard.searchClients(filter);
+        }
         return WireGuard.getClients();
+      }))
+      .get('/api/wireguard/client/:clientId', Util.promisify(async (req) => {
+        const { clientId } = req.params;
+        const clients = await WireGuard.getClients();
+        const client = clients.find((c) => c.id === clientId);
+        if (!client) {
+          throw new ServerError(`Client Not Found: ${clientId}`, 404);
+        }
+        return client;
+      }))
+      .get('/api/wireguard/statistics', Util.promisify(async (req) => {
+        const clients = await WireGuard.getClients();
+        const totalClients = clients.length;
+        const enabledClients = clients.filter((c) => c.enabled).length;
+        const activeClients = clients.filter(
+          (c) => c.latestHandshakeAt && (new Date() - new Date(c.latestHandshakeAt) < 1000 * 60 * 10)
+        ).length;
+        const totalTransferRx = clients.reduce((sum, c) => sum + (c.transferRx || 0), 0);
+        const totalTransferTx = clients.reduce((sum, c) => sum + (c.transferTx || 0), 0);
+
+        return {
+          totalClients,
+          enabledClients,
+          activeClients,
+          totalTransferRx,
+          totalTransferTx,
+        };
+      }))
+      .get('/api/wireguard/export', Util.promisify(async (req, res) => {
+        const configurations = await WireGuard.exportAllConfigurations();
+        res.header('Content-Disposition', 'attachment; filename="wireguard-configs.json"');
+        res.header('Content-Type', 'application/json');
+        return configurations;
+      }))
+      .get('/api/wireguard/server-info', Util.promisify(async (req) => {
+        return WireGuard.getServerInfo();
       }))
       .get('/api/wireguard/client/:clientId/qrcode.svg', Util.promisify(async (req, res) => {
         const { clientId } = req.params;
@@ -120,16 +192,21 @@ module.exports = class Server {
         res.header('Content-Type', 'image/svg+xml');
         res.send(svg);
       }))
+      .get('/api/wireguard/client/:clientId/qrcode.png', Util.promisify(async (req, res) => {
+        const { clientId } = req.params;
+        const dataUrl = await WireGuard.getClientQRCodeDataURL({ clientId });
+        // Convert data URL to buffer
+        const base64Data = dataUrl.replace(/^data:image\/png;base64,/, '');
+        const buffer = Buffer.from(base64Data, 'base64');
+        res.header('Content-Type', 'image/png');
+        res.send(buffer);
+      }))
       .get('/api/wireguard/client/:clientId/configuration', Util.promisify(async (req, res) => {
         const { clientId } = req.params;
         const client = await WireGuard.getClient({ clientId });
         const config = await WireGuard.getClientConfiguration({ clientId });
-        const configName = client.name
-          .replace(/[^a-zA-Z0-9_=+.-]/g, '-')
-          .replace(/(-{2,}|-$)/g, '-')
-          .replace(/-$/, '')
-          .substring(0, 32);
-        res.header('Content-Disposition', `attachment; filename="${configName || clientId}.conf"`);
+        const configName = Util.cleanFilename(client.name) || clientId;
+        res.header('Content-Disposition', `attachment; filename="${configName}.conf"`);
         res.header('Content-Type', 'text/plain');
         res.send(config);
       }))
@@ -154,6 +231,12 @@ module.exports = class Server {
           res.end(403);
         }
         return WireGuard.disableClient({ clientId });
+      }))
+      .post('/api/wireguard/client/enable-all', Util.promisify(async (req) => {
+        return WireGuard.enableAllClients();
+      }))
+      .post('/api/wireguard/client/disable-all', Util.promisify(async (req) => {
+        return WireGuard.disableAllClients();
       }))
       .put('/api/wireguard/client/:clientId/name', Util.promisify(async (req, res) => {
         const { clientId } = req.params;

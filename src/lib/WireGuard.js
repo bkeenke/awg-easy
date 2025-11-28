@@ -220,6 +220,23 @@ AllowedIPs = ${client.address}/32`;
     return clients;
   }
 
+  async searchClients(filter) {
+    const clients = await this.getClients();
+    
+    if (!filter || !filter.trim()) {
+      return clients;
+    }
+
+    const searchTerm = filter.toLowerCase().trim();
+    return clients.filter((client) => {
+      return (
+        client.name.toLowerCase().includes(searchTerm) ||
+        client.address.includes(searchTerm) ||
+        client.id.toLowerCase().includes(searchTerm)
+      );
+    });
+  }
+
   async getClient({ clientId }) {
     const config = await this.getConfig();
     const client = config.clients[clientId];
@@ -262,6 +279,16 @@ Endpoint = ${WG_HOST}:${WG_PORT}`;
     return QRCode.toString(config, {
       type: 'svg',
       width: 512,
+      errorCorrectionLevel: 'L',
+    });
+  }
+
+  async getClientQRCodeDataURL({ clientId }) {
+    const config = await this.getClientConfiguration({ clientId });
+    return QRCode.toDataURL(config, {
+      width: 512,
+      errorCorrectionLevel: 'L',
+      margin: 1,
     });
   }
 
@@ -343,6 +370,28 @@ Endpoint = ${WG_HOST}:${WG_PORT}`;
     await this.saveConfig();
   }
 
+  async enableAllClients() {
+    const config = await this.getConfig();
+    
+    for (const clientId in config.clients) {
+      config.clients[clientId].enabled = true;
+      config.clients[clientId].updatedAt = new Date();
+    }
+
+    await this.saveConfig();
+  }
+
+  async disableAllClients() {
+    const config = await this.getConfig();
+    
+    for (const clientId in config.clients) {
+      config.clients[clientId].enabled = false;
+      config.clients[clientId].updatedAt = new Date();
+    }
+
+    await this.saveConfig();
+  }
+
   async updateClientName({ clientId, name }) {
     const client = await this.getClient({ clientId });
 
@@ -363,6 +412,50 @@ Endpoint = ${WG_HOST}:${WG_PORT}`;
     client.updatedAt = new Date();
 
     await this.saveConfig();
+  }
+
+  async exportAllConfigurations() {
+    const config = await this.getConfig();
+    const configurations = {};
+
+    for (const [clientId, client] of Object.entries(config.clients)) {
+      if ('privateKey' in client) {
+        configurations[clientId] = {
+          name: client.name,
+          config: await this.getClientConfiguration({ clientId }),
+        };
+      }
+    }
+
+    return configurations;
+  }
+
+  async getServerInfo() {
+    const config = await this.getConfig();
+    const clients = await this.getClients();
+    
+    return {
+      publicKey: config.server.publicKey,
+      address: config.server.address,
+      port: require('../config').WG_PORT,
+      endpoint: require('../config').WG_HOST,
+      totalClients: clients.length,
+      enabledClients: clients.filter((c) => c.enabled).length,
+      activeClients: clients.filter(
+        (c) => c.latestHandshakeAt && (new Date() - new Date(c.latestHandshakeAt) < 1000 * 60 * 10)
+      ).length,
+      amneziaParams: {
+        jc: config.server.jc,
+        jmin: config.server.jmin,
+        jmax: config.server.jmax,
+        s1: config.server.s1,
+        s2: config.server.s2,
+        h1: config.server.h1,
+        h2: config.server.h2,
+        h3: config.server.h3,
+        h4: config.server.h4,
+      },
+    };
   }
 
 };

@@ -60,8 +60,23 @@
           <div class="flex flex-row flex-auto items-center p-3 px-5 border-b-2 border-gray-100 dark:border-neutral-600">
             <div class="flex-grow">
               <p class="text-2xl font-medium dark:text-neutral-200">{{$t("clients")}}</p>
+              <!-- Statistics -->
+              <div v-if="statistics" class="text-xs text-gray-500 dark:text-neutral-400 mt-1">
+                <span>{{$t("total")}}: {{statistics.totalClients}}</span>
+                <span class="ml-3">{{$t("enabled")}}: {{statistics.enabledClients}}</span>
+                <span class="ml-3">{{$t("active")}}: {{statistics.activeClients}}</span>
+                <span class="ml-3">↓ {{statistics.totalTransferRx | bytes}}</span>
+                <span class="ml-2">↑ {{statistics.totalTransferTx | bytes}}</span>
+              </div>
             </div>
-            <div class="flex-shrink-0">
+            <div class="flex-shrink-0 flex gap-2">
+              <!-- Search Input -->
+              <input
+                v-model="searchFilter"
+                type="text"
+                :placeholder="$t('search') || 'Search...'"
+                class="px-3 py-2 rounded border-2 border-gray-100 dark:border-neutral-600 dark:bg-neutral-700 dark:text-neutral-200 outline-none focus:border-red-800 dark:focus:border-red-800 text-sm"
+              />
               <button @click="clientCreate = true; clientCreateName = '';"
                 class="hover:bg-red-800 hover:border-red-800 hover:text-white text-gray-700 dark:text-neutral-200 border-2 border-gray-100 dark:border-neutral-600 py-2 px-4 rounded inline-flex items-center transition">
                 <svg class="w-4 mr-2" inline xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
@@ -76,7 +91,7 @@
 
           <div>
             <!-- Client -->
-            <div v-if="clients && clients.length > 0" v-for="client in clients" :key="client.id"
+            <div v-if="filteredClients && filteredClients.length > 0" v-for="client in filteredClients" :key="client.id"
               class="relative overflow-hidden border-b last:border-b-0 border-gray-100 dark:border-neutral-600 border-solid">
 
               <!-- Chart -->
@@ -256,6 +271,11 @@
 
               </div>
 
+            </div>
+            <div v-if="clients && filteredClients && filteredClients.length === 0 && searchFilter">
+              <p class="text-center m-10 text-gray-400 dark:text-neutral-400 text-sm">
+                {{$t("noClientsFound") || "No clients found matching your search"}}
+              </p>
             </div>
             <div v-if="clients && clients.length === 0">
               <p class="text-center m-10 text-gray-400 dark:text-neutral-400 text-sm">
